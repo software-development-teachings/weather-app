@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vanilla JS Weather App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <main class="weather-app">
+    <!-- Search Bar Form -->
+    <form id="search-form" class="search-form">
+      <input 
+        type="text" 
+        id="search-input" 
+        class="search-input" 
+        placeholder="Search city (e.g., London, Tokyo, Lagos)..." 
+        autocomplete="off"
+        required
+      >
+      <button type="submit" class="btn-search" aria-label="Search city weather">
+        🔍 Search
+      </button>
+    </form>
+
+    <!-- Error Banner Message -->
+    <div id="error-banner" class="error-banner hidden" role="alert"></div>
+
+    <!-- Loading Spinner Indicator -->
+    <div id="loading-spinner" class="loading-spinner hidden">
+      <div class="spinner"></div>
+      <p>Fetching weather data...</p>
+    </div>
+
+    <!-- Main Weather Display Dashboard -->
+    <section id="weather-card" class="weather-card hidden">
+      <header class="location-header">
+        <div>
+          <h1 id="city-name" class="city-name">--</h1>
+          <p id="current-date" class="current-date">--</p>
+        </div>
+        <button id="unit-toggle" class="btn-unit" aria-label="Toggle Temperature Unit">°C</button>
+      </header>
+
+      <!-- Primary Temperature Display -->
+      <div class="weather-main">
+        <img id="weather-icon" class="weather-icon" src="" alt="Weather Icon" hidden>
+        <div class="temp-container">
+          <span id="temperature" class="temperature">--</span>
+          <span class="temp-unit">°C</span>
+        </div>
+        <p id="weather-condition" class="weather-condition">--</p>
+      </div>
+
+      <!-- Secondary Metrics Grid -->
+      <div class="weather-details">
+        <div class="detail-item">
+          <span class="detail-label">Feels Like</span>
+          <span id="feels-like" class="detail-value">--</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Humidity</span>
+          <span id="humidity" class="detail-value">--</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Wind Speed</span>
+          <span id="wind-speed" class="detail-value">--</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Pressure</span>
+          <span id="pressure" class="detail-value">--</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
