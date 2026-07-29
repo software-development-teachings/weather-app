@@ -23,7 +23,37 @@ const GEOCODING_API_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 const WEATHER_API_URL = 'https://api.open-meteo.com/v1/forecast';
 
 // ==========================================================================
-// 2. WMO Weather Code Mapper Utility
+// 2. UI State Helper Functions
+// ==========================================================================
+
+/**
+ * Shows loading spinner and hides active weather card and error banners
+ */
+function showLoadingState() {
+  loadingSpinner.classList.remove('hidden');
+  weatherCard.classList.add('hidden');
+  errorBanner.classList.add('hidden');
+}
+
+/**
+ * Hides loading spinner
+ */
+function hideLoadingState() {
+  loadingSpinner.classList.add('hidden');
+}
+
+/**
+ * Displays an error banner with a custom message
+ * @param {string} message - Error details to present to the user
+ */
+function showError(message) {
+  errorBanner.textContent = message;
+  errorBanner.classList.remove('hidden');
+  weatherCard.classList.add('hidden');
+}
+
+// ==========================================================================
+// 3. WMO Weather Code Mapper Utility
 // ==========================================================================
 
 /**
@@ -58,49 +88,64 @@ function getWeatherConditionMeta(code) {
 }
 
 // ==========================================================================
-// 3. Async Data Handlers
+// 4. Async Data Handlers
 // ==========================================================================
 
 /**
  * Step 1: Geocode city name to lat/lon coordinates
  */
 async function fetchCityCoordinates(city) {
-  const response = await fetch(
-    `${GEOCODING_API_URL}?name=${encodeURIComponent(city)}&count=1&language=en&format=json`
-  );
+  try {
+    const response = await fetch(
+      `${GEOCODING_API_URL}?name=${encodeURIComponent(city)}&count=1&language=en&format=json`
+    );
 
-  if (!response.ok) {
-    throw new Error(`Geocoding server error (${response.status})`);
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}. Please try again later.`);
+    }
+
+    const data = await response.json();
+
+    if (!data.results || data.results.length === 0) {
+      throw new Error(`City "${city}" not found. Please check spelling.`);
+    }
+
+    const { latitude, longitude, name, country } = data.results[0];
+    return { latitude, longitude, name, country };
+  } catch (error) {
+    // Re-throw network or parsing errors with friendly messages
+    if (error.name === 'TypeError') {
+      throw new Error('Network connection failure. Please check your internet connection.');
+    }
+    throw error;
   }
-
-  const data = await response.json();
-
-  if (!data.results || data.results.length === 0) {
-    throw new Error(`City "${city}" not found. Please check spelling.`);
-  }
-
-  const { latitude, longitude, name, country } = data.results[0];
-  return { latitude, longitude, name, country };
 }
 
 /**
  * Step 2: Fetch current weather metrics using latitude & longitude
  */
 async function fetchWeatherData(lat, lon) {
-  const params = new URLSearchParams({
-    latitude: lat,
-    longitude: lon,
-    current: 'temperature_2m,relative_humidity_2m,apparent_temperature,surface_pressure,wind_speed_10m,weather_code',
-    timezone: 'auto'
-  });
+  try {
+    const params = new URLSearchParams({
+      latitude: lat,
+      longitude: lon,
+      current: 'temperature_2m,relative_humidity_2m,apparent_temperature,surface_pressure,wind_speed_10m,weather_code',
+      timezone: 'auto'
+    });
 
-  const response = await fetch(`${WEATHER_API_URL}?${params.toString()}`);
+    const response = await fetch(`${WEATHER_API_URL}?${params.toString()}`);
 
-  if (!response.ok) {
-    throw new Error(`Weather data server error (${response.status})`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch weather data (${response.status}).`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error.name === 'TypeError') {
+      throw new Error('Unable to reach weather servers. Check your internet connection.');
+    }
+    throw error;
   }
-
-  return await response.json();
 }
 
 /**
@@ -118,12 +163,11 @@ async function getCityWeather(city) {
 }
 
 // ==========================================================================
-// 4. Dynamic DOM Rendering
+// 5. Dynamic DOM Rendering
 // ==========================================================================
 
 /**
  * Maps parsed weather object onto DOM nodes
- * @param {Object} data - Processed weather payload
  */
 function renderWeatherUI(data) {
   const { location, current, units } = data;
@@ -151,23 +195,33 @@ function renderWeatherUI(data) {
   weatherIconEl.alt = description;
   weatherIconEl.hidden = false;
 
-  // Make weather card visible
+  // Show weather card
   weatherCard.classList.remove('hidden');
 }
 
 // ==========================================================================
-// 5. Event Listeners
+// 6. Form Submission Event Listener
 // ==========================================================================
 searchForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const query = searchInput.value.trim();
 
-  if (!query) return;
+  // Handle empty input state
+  if (!query) {
+    showError('Please enter a city name to search.');
+    return;
+  }
+
+  // Set UI state to loading
+  showLoadingState();
 
   try {
     const data = await getCityWeather(query);
     renderWeatherUI(data);
   } catch (err) {
-    alert(`Error: ${err.message}`);
+    showError(err.message);
+  } finally {
+    // Guarantees spinner turns off regardless of success or failure
+    hideLoadingState();
   }
 });
