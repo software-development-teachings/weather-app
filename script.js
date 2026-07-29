@@ -1,5 +1,5 @@
 // ==========================================================================
-// 1. DOM Element Selectors
+// 1. DOM Element Selectors & Global Application State
 // ==========================================================================
 const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
@@ -12,54 +12,60 @@ const cityNameEl = document.getElementById('city-name');
 const currentDateEl = document.getElementById('current-date');
 const weatherIconEl = document.getElementById('weather-icon');
 const temperatureEl = document.getElementById('temperature');
+const tempUnitEl = document.getElementById('temp-unit');          // Safely handled if missing
+const unitToggleBtn = document.getElementById('unit-toggle');      // Safely handled if missing
 const weatherConditionEl = document.getElementById('weather-condition');
 const feelsLikeEl = document.getElementById('feels-like');
 const humidityEl = document.getElementById('humidity');
 const windSpeedEl = document.getElementById('wind-speed');
 const pressureEl = document.getElementById('pressure');
 
+// Application State
+const state = {
+  currentUnit: 'C', // 'C' for Celsius, 'F' for Fahrenheit
+  weatherData: null  // Holds active raw payload
+};
+
 // API Endpoints (Open-Meteo — Free & Keyless)
 const GEOCODING_API_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 const WEATHER_API_URL = 'https://api.open-meteo.com/v1/forecast';
 
 // ==========================================================================
-// 2. UI State Helper Functions
+// 2. UI State & Utility Helpers
 // ==========================================================================
 
-/**
- * Shows loading spinner and hides active weather card and error banners
- */
 function showLoadingState() {
   loadingSpinner.classList.remove('hidden');
   weatherCard.classList.add('hidden');
   errorBanner.classList.add('hidden');
 }
 
-/**
- * Hides loading spinner
- */
 function hideLoadingState() {
   loadingSpinner.classList.add('hidden');
 }
 
-/**
- * Displays an error banner with a custom message
- * @param {string} message - Error details to present to the user
- */
 function showError(message) {
   errorBanner.textContent = message;
   errorBanner.classList.remove('hidden');
   weatherCard.classList.add('hidden');
 }
 
-// ==========================================================================
-// 3. WMO Weather Code Mapper Utility
-// ==========================================================================
+/**
+ * Temperature Unit Converter
+ * @param {number} celsius - Temperature in Celsius
+ * @param {string} unit - Target unit ('C' or 'F')
+ * @returns {number} Converted value
+ */
+function convertTemperature(celsius, unit) {
+  if (unit === 'F') {
+    return Math.round((celsius * 9) / 5 + 32);
+  }
+  return Math.round(celsius);
+}
 
 /**
- * Maps WMO weather interpretation codes to readable descriptions and OpenWeather icon codes
- * @param {number} code - WMO weather code
- * @returns {Object} { description, icon }
+ * WMO Weather Code Mapper
+ * Translates numerical weather codes into human-readable descriptions and icon IDs
  */
 function getWeatherConditionMeta(code) {
   const weatherMap = {
@@ -88,12 +94,9 @@ function getWeatherConditionMeta(code) {
 }
 
 // ==========================================================================
-// 4. Async Data Handlers
+// 3. Async Data Handlers
 // ==========================================================================
 
-/**
- * Step 1: Geocode city name to lat/lon coordinates
- */
 async function fetchCityCoordinates(city) {
   try {
     const response = await fetch(
@@ -113,17 +116,13 @@ async function fetchCityCoordinates(city) {
     const { latitude, longitude, name, country } = data.results[0];
     return { latitude, longitude, name, country };
   } catch (error) {
-    // Re-throw network or parsing errors with friendly messages
     if (error.name === 'TypeError') {
-      throw new Error('Network connection failure. Please check your internet connection.');
+      throw new Error('Network connection failure. Please check internet connection.');
     }
     throw error;
   }
 }
 
-/**
- * Step 2: Fetch current weather metrics using latitude & longitude
- */
 async function fetchWeatherData(lat, lon) {
   try {
     const params = new URLSearchParams({
@@ -142,15 +141,12 @@ async function fetchWeatherData(lat, lon) {
     return await response.json();
   } catch (error) {
     if (error.name === 'TypeError') {
-      throw new Error('Unable to reach weather servers. Check your internet connection.');
+      throw new Error('Unable to reach weather servers.');
     }
     throw error;
   }
 }
 
-/**
- * Orchestrator function connecting Geocoding + Weather Fetching
- */
 async function getCityWeather(city) {
   const location = await fetchCityCoordinates(city);
   const weatherData = await fetchWeatherData(location.latitude, location.longitude);
@@ -163,17 +159,15 @@ async function getCityWeather(city) {
 }
 
 // ==========================================================================
-// 5. Dynamic DOM Rendering
+// 4. Dynamic DOM Rendering & Unit Updates
 // ==========================================================================
 
-/**
- * Maps parsed weather object onto DOM nodes
- */
-function renderWeatherUI(data) {
-  const { location, current, units } = data;
+function renderWeatherUI() {
+  if (!state.weatherData) return;
+
+  const { location, current, units } = state.weatherData;
   const { description, icon } = getWeatherConditionMeta(current.weather_code);
 
-  // Update text nodes
   cityNameEl.textContent = location;
   currentDateEl.textContent = new Date().toLocaleDateString('en-US', {
     weekday: 'short',
@@ -181,47 +175,66 @@ function renderWeatherUI(data) {
     day: 'numeric'
   });
 
-  temperatureEl.textContent = Math.round(current.temperature_2m);
+  // Apply active unit conversion
+  const tempVal = convertTemperature(current.temperature_2m, state.currentUnit);
+  const feelsLikeVal = convertTemperature(current.apparent_temperature, state.currentUnit);
+
+  temperatureEl.textContent = tempVal;
+
+  // Safe checks so missing optional elements won't crash execution
+  if (tempUnitEl) tempUnitEl.textContent = `°${state.currentUnit}`;
+  if (unitToggleBtn) unitToggleBtn.textContent = `°${state.currentUnit === 'C' ? 'F' : 'C'}`;
+
   weatherConditionEl.textContent = description;
 
-  // Secondary metrics with unit formatting
-  feelsLikeEl.textContent = `${Math.round(current.apparent_temperature)}${units.apparent_temperature}`;
+  feelsLikeEl.textContent = `${feelsLikeVal}°${state.currentUnit}`;
   humidityEl.textContent = `${current.relative_humidity_2m}${units.relative_humidity_2m}`;
   windSpeedEl.textContent = `${current.wind_speed_10m} ${units.wind_speed_10m}`;
   pressureEl.textContent = `${Math.round(current.surface_pressure)} ${units.surface_pressure}`;
 
-  // Weather icon mapping
-  weatherIconEl.src = `https://openweathermap.org/img/wn/${icon}@2x.png`;
-  weatherIconEl.alt = description;
-  weatherIconEl.hidden = false;
+  // Update image source & ensure the icon element is fully unhidden
+  if (weatherIconEl) {
+    weatherIconEl.src = `https://openweathermap.org/img/wn/${icon}@2x.png`;
+    weatherIconEl.alt = description;
+    weatherIconEl.hidden = false;
+    weatherIconEl.classList.remove('hidden');
+  }
 
-  // Show weather card
+  // Display weather card container
   weatherCard.classList.remove('hidden');
 }
 
 // ==========================================================================
-// 6. Form Submission Event Listener
+// 5. Event Listeners
 // ==========================================================================
+
+// Search Form Listener
 searchForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const query = searchInput.value.trim();
 
-  // Handle empty input state
   if (!query) {
     showError('Please enter a city name to search.');
     return;
   }
 
-  // Set UI state to loading
   showLoadingState();
 
   try {
     const data = await getCityWeather(query);
-    renderWeatherUI(data);
+    state.weatherData = data; // Store raw payload in state
+    renderWeatherUI();
   } catch (err) {
     showError(err.message);
   } finally {
-    // Guarantees spinner turns off regardless of success or failure
     hideLoadingState();
   }
 });
+
+// Unit Toggle Listener (only attached if element exists in HTML)
+if (unitToggleBtn) {
+  unitToggleBtn.addEventListener('click', () => {
+    state.currentUnit = state.currentUnit === 'C' ? 'F' : 'C';
+    renderWeatherUI();
+  });
+}
